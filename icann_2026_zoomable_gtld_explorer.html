@@ -1360,24 +1360,93 @@ function renderBubblePack() {
     .on("mousemove", (e, d) => moveTooltip(e))
     .on("mouseleave", () => hideTooltip());
 
-  const label = contentGroup.append("g")
+  // 1. Group Category Header Pills (Positioned at TOP perimeter of group circle, NEVER in center)
+  const groupHeaders = contentGroup.append("g")
+    .attr("class", "bubble-group-headers")
     .style("pointer-events", "none")
-    .selectAll("text")
-    .data(root.descendants().slice(1))
-    .join("text")
-    .attr("x", d => d.x)
-    .attr("y", d => d.y + 4)
+    .selectAll("g")
+    .data(root.descendants().filter(d => d.depth > 0 && d.children && d.r > 26))
+    .join("g")
+    .attr("transform", d => `translate(${d.x},${d.y - d.r + 14})`);
+
+  groupHeaders.append("rect")
+    .attr("fill", "rgba(10, 15, 29, 0.88)")
+    .attr("stroke", "rgba(255, 255, 255, 0.22)")
+    .attr("stroke-width", 0.8)
+    .attr("rx", 9)
+    .attr("ry", 9)
+    .attr("height", 18)
+    .attr("y", -9)
+    .each(function(d) {
+      const txt = d.data.name || "";
+      const width = Math.min(d.r * 1.6, txt.length * 6.8 + 16);
+      d3.select(this)
+        .attr("width", width)
+        .attr("x", -width / 2);
+    });
+
+  groupHeaders.append("text")
+    .attr("text-anchor", "middle")
+    .attr("y", 3.5)
+    .attr("fill", "#94a3b8")
+    .attr("font-family", "'Plus Jakarta Sans', sans-serif")
+    .attr("font-weight", "700")
+    .attr("font-size", "10px")
+    .attr("letter-spacing", "0.4px")
+    .text(d => {
+      const txt = d.data.name || "";
+      const maxLen = Math.floor(d.r * 0.22);
+      return (txt.length > maxLen && maxLen > 6) ? txt.slice(0, maxLen - 2) + "…" : txt;
+    });
+
+  // 2. Leaf Domain Labels (Placed in center of leaf circle, never covered by group text)
+  const leafLabels = contentGroup.append("g")
+    .attr("class", "bubble-leaf-labels")
+    .style("pointer-events", "none")
+    .selectAll("g")
+    .data(root.descendants().filter(d => !d.children))
+    .join("g")
+    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+  leafLabels.append("text")
+    .attr("class", "bubble-leaf-text")
     .attr("text-anchor", "middle")
     .attr("fill", "#ffffff")
     .attr("font-family", "'JetBrains Mono', monospace")
-    .attr("font-weight", d => d.children ? 700 : 600)
-    .attr("font-size", d => `${Math.max(8, Math.min(14, (d.children ? 11 : 9) * (d.r / 20)))}px`)
+    .attr("font-weight", 700)
+    .style("text-shadow", "0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.95)")
+    .attr("y", d => {
+      const idn = getIDNInfo(d.data.name);
+      return idn && d.r > 20 ? -2 : 3.5;
+    })
+    .attr("font-size", d => {
+      if (d.r < 9) return "0px";
+      if (d.r < 18) return "9px";
+      if (d.r < 32) return "11px";
+      return "13px";
+    })
+    .text(d => {
+      if (d.r < 9) return "";
+      const idn = getIDNInfo(d.data.name);
+      if (idn) return idn.unicode;
+      const n = d.data.name || "";
+      return d.r < 22 && n.length > 7 ? n.slice(0, 6) + "…" : n;
+    });
+
+  // Secondary sublabel for IDN English equivalent or contested badge
+  leafLabels.filter(d => d.r > 20)
+    .append("text")
+    .attr("text-anchor", "middle")
+    .attr("y", 11)
+    .attr("font-family", "'JetBrains Mono', monospace")
+    .attr("font-size", "8.5px")
+    .attr("font-weight", 600)
+    .style("text-shadow", "0 1px 2px rgba(0,0,0,0.9)")
+    .attr("fill", d => getIDNInfo(d.data.name) ? "#38bdf8" : (d.data.value > 1 ? "#f43f5e" : "#94a3b8"))
     .text(d => {
       const idn = getIDNInfo(d.data.name);
-      if (idn) return d.r > 16 ? `${idn.unicode} (≈${idn.englishEquiv})` : idn.unicode;
-      const n = d.data.name || "";
-      if (d.children) return n.length > 20 ? n.slice(0, 18) + "…" : n;
-      return d.r > 12 ? n : "";
+      if (idn) return `≈ ${idn.englishEquiv}`;
+      return (d.data.value > 1) ? `⚔ ${d.data.value}` : "";
     });
 
   updateBreadcrumbs(root);
