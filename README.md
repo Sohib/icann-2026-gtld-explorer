@@ -17,6 +17,7 @@ An interactive visual intelligence dashboard mapping **2,056 applications** acro
 * **🌐 IDN Translations & English Equivalents**: Comprehensive mapping for all 27 Internationalized Domain Name strings (`.xn--...`), showing their native Unicode characters (Chinese, Japanese, French), literal meaning, and closest single-word English TLD equivalent (e.g., `.官网` ≈ `.official`, `.智能体` ≈ `.agent`, `.人工智能` ≈ `.ai`, `.机器人` ≈ `.robot`, `.钱包` ≈ `.wallet`).
 * **🏢 Top Applicants Portfolio (480 Entities)**: Ranked breakdown of major applicants (Link Freedom Group Ltd with 213, XYZ.COM LLC with 182, Intercap with 92, Radix with 70, Google/Charleston Road with 39, OpenAI, etc.) with 1-click portfolio drill-down.
 * **☰ Data Directory & CSV Export**: Complete searchable, sortable database with one-click CSV download.
+* **⚠ Typosquatting & File-extension Risk Review**: Two static, defensively focused queues: **gTLD similarity** lists precomputed font-aware visual matches at 80+ and groups them by closest delegated target; **file-extension cues** separately lists exact applications that match the comprehensive MIME database, including `.pdf`, `.php`, and `.tex`. Results are generated in this workstation from IANA root-zone version 2026100800, then embedded in `risk-results.js`; the browser does not fetch references or calculate similarity. Scores prioritize review; they do not attribute intent.
 * **🔍 Real-Time Smart Search & Autocomplete**: Search by TLD string, English equivalent, native script, applicant name, or theme.
 
 ---

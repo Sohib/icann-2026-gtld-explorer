@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="risk-results.js"></script>
 <style>
 :root {
   --bg-base: #070a13;
@@ -703,6 +704,33 @@ aside.sidebar {
   display: block;
 }
 
+/* Defensive Risk Review */
+.risk-method {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(251, 146, 60, 0.35);
+  border-radius: var(--radius-md);
+  background: rgba(251, 146, 60, 0.07);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.risk-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  color: #fb923c;
+}
+.risk-badge {
+  display: inline-block;
+  padding: 3px 7px;
+  border: 1px solid rgba(251, 146, 60, 0.4);
+  border-radius: 999px;
+  color: #fdba74;
+  background: rgba(251, 146, 60, 0.1);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 /* Battleground View */
 .battleground-grid {
   display: grid;
@@ -926,6 +954,7 @@ table.data-table tr:hover td {
     <button class="tab-btn" data-view="battleground">⚔ Contested Battleground (293)</button>
     <button class="tab-btn" data-view="applicants">🏢 Top Applicants (480)</button>
     <button class="tab-btn" data-view="table">☰ Data Directory</button>
+    <button class="tab-btn" data-view="risk">⚠ Risk Review</button>
   </div>
 
   <div class="size-toggle">
@@ -990,6 +1019,36 @@ table.data-table tr:hover td {
         <span style="color:var(--text-muted); font-size:13px;">Ranked by rivalry intensity</span>
       </div>
       <div class="battleground-grid" id="battleground-grid"></div>
+    </div>
+    <div id="panel-risk" class="view-panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px;">
+        <h2 style="font-size:18px; font-weight:700;">Typosquatting & File-extension Review</h2>
+        <span id="risk-reference-status" style="color:var(--text-muted); font-size:12px;">Loading IANA root-zone references…</span>
+      </div>
+      <div class="risk-method">
+        <strong style="color:#fdba74;">Precomputed screening snapshot; not an attribution of intent.</strong>
+        Findings were calculated on this workstation against IANA root-zone version 2026100800. Visual matches use the dashboard-font comparison pipeline; file-extension cues use the comprehensive MIME database. The browser only loads the embedded snapshot and does not fetch references or calculate similarity.
+      </div>
+      <div class="group-toggle" id="risk-mode-toggle" aria-label="Risk review finding type" style="margin:0 0 12px;">
+        <button class="group-btn active" type="button" data-risk-mode="visual">gTLD similarity ≥80</button>
+        <button class="group-btn" type="button" data-risk-mode="extensions">File-extension cues</button>
+        <span id="risk-mode-summary" style="align-self:center; padding:0 8px; color:var(--text-muted); font-size:11px;"></span>
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th id="risk-score-header">Visual score</th>
+              <th id="risk-application-header">Applied TLD</th>
+              <th id="risk-target-header">Closest delegated TLD</th>
+              <th id="risk-similarity-header">Visual similarity (font)</th>
+              <th id="risk-cue-header">File-extension cue</th>
+              <th>Applicants</th>
+            </tr>
+          </thead>
+          <tbody id="risk-table-body"></tbody>
+        </table>
+      </div>
     </div>
     <div id="panel-applicants" class="view-panel">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -1144,6 +1203,61 @@ applicantMap.forEach((tlds, name) => {
 });
 applicantStats.sort((a, b) => b.count - a.count);
 
+/* --- Precomputed Defensive Risk Findings --- */
+const VISUAL_REVIEW_MIN_SCORE = window.PRECOMPUTED_RISK_FINDINGS.visualMinimum;
+let riskReviewMode = "visual";
+let riskAnalysis = [];
+let riskReferenceStatus = "Loading precomputed findings…";
+
+// Analyst-reviewed corrections for equal-edit candidates where bitmap overlap selected the wrong target.
+const REVIEWED_CLOSEST_TARGETS = new Map([
+  [".con", { target: ".com", popularityTier: 1 }],
+  [".neo", { target: ".new", popularityTier: null }]
+]);
+
+const FILE_EXTENSION_POPULARITY_ORDER = new Map([
+  "pdf", "php", "bin", "class", "log", "conf", "tex", "key", "ics", "war",
+  "xpi", "atom", "arc", "air", "cap", "src", "text", "list", "res", "acc",
+  "ace", "age", "ami", "blend", "deploy", "dna", "frame", "maker", "mesh",
+  "owl", "pki", "plc", "pot", "rep", "sea", "see", "sus", "swi", "tap",
+  "viv", "bdo", "ddd", "exp", "ext", "for", "gram", "mag"
+].map((extension, index) => [extension, index + 1]));
+
+function fileExtensionPopularity(extension) {
+  return FILE_EXTENSION_POPULARITY_ORDER.get(extension) || Number.POSITIVE_INFINITY;
+}
+
+function tldLabel(name) {
+  return String(name || "").replace(/^\./, "").toLowerCase();
+}
+
+function loadRiskReferences() {
+  const snapshot = window.PRECOMPUTED_RISK_FINDINGS;
+  if (!snapshot) {
+    riskReferenceStatus = "Precomputed risk findings were unavailable";
+    return;
+  }
+  const targets = snapshot.targets.split(",");
+  riskAnalysis = snapshot.rows.split("|").map(row => {
+    const [applicationIndex, targetIndex, visualScore, popularityTier, extensionMatch] = row.split(",");
+    const application = allTLDList[parseInt(applicationIndex, 36)];
+    const reviewed = REVIEWED_CLOSEST_TARGETS.get(application?.name);
+    const extensionCue = extensionMatch ? "MIME database file extension" : "";
+    return {
+      application,
+      closestTLD: reviewed?.target || targets[parseInt(targetIndex, 36)] || "—",
+      closestPopularityTier: reviewed?.popularityTier ?? (Number(popularityTier) || null),
+      visualScore: parseInt(visualScore, 36),
+      comparisonExcluded: false,
+      extensionCue,
+      extensionScore: extensionCue ? 100 : 0,
+      score: extensionCue ? 100 : parseInt(visualScore, 36)
+    };
+  }).filter(item => item.application);
+  riskReferenceStatus = `${riskAnalysis.length} precomputed findings · IANA ${snapshot.ianaVersion} · MIME database`;
+  if (currentView === "risk") renderRiskReview();
+}
+
 /* --- UI References --- */
 const container = document.getElementById("viz-container");
 const tooltip = document.getElementById("floating-tooltip");
@@ -1240,6 +1354,11 @@ function renderCurrentView() {
     dismissZoomCoachmark();
     document.getElementById("panel-applicants").classList.add("active");
     renderApplicants();
+    return;
+  } else if (currentView === "risk") {
+    dismissZoomCoachmark();
+    document.getElementById("panel-risk").classList.add("active");
+    renderRiskReview();
     return;
   } else if (currentView === "table") {
     dismissZoomCoachmark();
@@ -1921,6 +2040,124 @@ function renderTable() {
   });
 }
 
+/* --- 6. Defensive Risk Review --- */
+function renderRiskReview() {
+  const status = document.getElementById("risk-reference-status");
+  const tbody = document.getElementById("risk-table-body");
+  status.textContent = riskReferenceStatus;
+  tbody.innerHTML = "";
+
+  if (!riskAnalysis.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:18px; color:var(--text-muted);">${escapeHtml(riskReferenceStatus)}</td></tr>`;
+    return;
+  }
+
+  const isExtensionMode = riskReviewMode === "extensions";
+  document.getElementById("risk-score-header").textContent = isExtensionMode ? "File extension" : "Visual score";
+  document.getElementById("risk-application-header").textContent = isExtensionMode ? "Category" : "Applied TLD";
+  document.getElementById("risk-target-header").textContent = isExtensionMode ? "Extension popularity" : "Closest delegated TLD";
+  document.getElementById("risk-similarity-header").textContent = isExtensionMode ? "Reference" : "Visual similarity (font)";
+  document.getElementById("risk-cue-header").textContent = isExtensionMode ? "Match type" : "File-extension cue";
+  const query = currentSearch.toLowerCase();
+  const filtered = riskAnalysis.filter(item => {
+    const application = item.application;
+    const idn = getIDNInfo(application.name);
+    const matchesCategory = selectedCategory === "ALL" || application.type === selectedCategory;
+    const matchesContested = !onlyContested || (application.value || 1) > 1;
+    const matchesSearch = !query ||
+      application.name.toLowerCase().includes(query) ||
+      item.closestTLD.includes(query) ||
+      item.extensionCue.toLowerCase().includes(query) ||
+      (idn && (idn.unicode.includes(query) || idn.meaning.toLowerCase().includes(query))) ||
+      (application.applicants || []).some(name => name.toLowerCase().includes(query));
+    const matchesFinding = isExtensionMode
+      ? Boolean(item.extensionCue)
+      : !item.comparisonExcluded && item.visualScore >= VISUAL_REVIEW_MIN_SCORE;
+    return matchesCategory && matchesContested && matchesSearch && matchesFinding;
+  });
+  document.getElementById("risk-mode-summary").textContent = isExtensionMode
+    ? `${filtered.length} exact extension cue${filtered.length === 1 ? "" : "s"}`
+    : `${filtered.length} visual match${filtered.length === 1 ? "" : "es"} at ${VISUAL_REVIEW_MIN_SCORE}+`;
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:18px; color:var(--text-muted);">No findings in this group match the active filters.</td></tr>`;
+    return;
+  }
+
+  const groups = new Map();
+  filtered.forEach(item => {
+    const key = isExtensionMode
+      ? `extension:${tldLabel(item.application.name)}`
+      : (item.closestTLD === "—" ? "no-comparable-target" : item.closestTLD);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        extensionCue: item.extensionCue,
+        popularityTier: item.closestPopularityTier || Number.POSITIVE_INFINITY,
+        items: []
+      });
+    }
+    groups.get(key).items.push(item);
+  });
+
+  Array.from(groups.values())
+    .sort((a, b) => isExtensionMode
+      ? fileExtensionPopularity(a.key.slice("extension:".length)) - fileExtensionPopularity(b.key.slice("extension:".length)) ||
+        a.key.localeCompare(b.key)
+      : a.popularityTier - b.popularityTier ||
+        Math.max(...b.items.map(item => item.visualScore)) - Math.max(...a.items.map(item => item.visualScore)) ||
+        a.key.localeCompare(b.key)
+    )
+    .forEach(group => {
+      group.items.sort((a, b) =>
+        (isExtensionMode ? b.extensionScore - a.extensionScore : b.visualScore - a.visualScore) ||
+        a.application.name.localeCompare(b.application.name)
+      );
+      const groupTitle = isExtensionMode
+        ? `File-extension cue: .${group.key.slice("extension:".length)} · ${group.extensionCue}`
+        : group.key === "no-comparable-target"
+          ? "No comparable delegated TLD"
+          : `Closest delegated TLD: ${group.key}${Number.isFinite(group.popularityTier) ? ` · registration popularity tier ${group.popularityTier}` : ""}`;
+      const heading = document.createElement("tr");
+      heading.innerHTML = `<td colspan="6" style="padding:12px 14px; background:rgba(56,189,248,0.08); color:#bae6fd; font-weight:700;">${escapeHtml(groupTitle)} <span style="color:var(--text-muted); font-size:11px;">${group.items.length} application${group.items.length === 1 ? "" : "s"}</span></td>`;
+      tbody.appendChild(heading);
+
+      group.items.forEach(item => {
+        const application = item.application;
+        const idn = getIDNInfo(application.name);
+        const extension = tldLabel(application.name);
+        const extensionPopularity = fileExtensionPopularity(extension);
+        const tr = document.createElement("tr");
+        tr.style.cursor = "pointer";
+        tr.innerHTML = isExtensionMode ? `
+          <td class="tld-cell">.${escapeHtml(extension)}</td>
+          <td>${escapeHtml(application.type)}</td>
+          <td>${Number.isFinite(extensionPopularity) ? `<span class="risk-badge">#${extensionPopularity}</span>` : '<span style="color:var(--text-dim);">Unranked</span>'}</td>
+          <td><span style="color:var(--text-muted);">MIME database</span></td>
+          <td><span class="risk-badge">Exact extension match</span></td>
+          <td style="font-size:11px; color:var(--text-muted); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml((application.applicants || []).join(", "))}</td>
+        ` : `
+          <td><span class="risk-score">${item.visualScore}</span> / 100</td>
+          <td class="tld-cell">${idn ? `${escapeHtml(idn.unicode)} <span style="color:var(--text-dim); font-size:11px;">(${escapeHtml(application.name)})</span>` : escapeHtml(application.name)}</td>
+          <td class="tld-cell">${escapeHtml(item.closestTLD)}</td>
+          <td><span class="risk-badge">${item.visualScore} / 100</span></td>
+          <td>${item.extensionCue ? `<span class="risk-badge">Exact match · ${escapeHtml(item.extensionCue)}</span>` : '<span style="color:var(--text-dim);">None</span>'}</td>
+          <td style="font-size:11px; color:var(--text-muted); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml((application.applicants || []).join(", "))}</td>
+        `;
+        tr.addEventListener("click", () => selectNode({ data: application }));
+        tbody.appendChild(tr);
+      });
+    });
+}
+
+document.querySelectorAll("[data-risk-mode]").forEach(button => {
+  button.addEventListener("click", () => {
+    riskReviewMode = button.dataset.riskMode;
+    document.querySelectorAll("[data-risk-mode]").forEach(item => item.classList.toggle("active", item === button));
+    if (currentView === "risk") renderRiskReview();
+  });
+});
+
 // Table sort click listeners
 document.querySelectorAll("table.data-table th[data-sort]").forEach(th => {
   th.addEventListener("click", () => {
@@ -2170,7 +2407,7 @@ searchInput.addEventListener("input", () => {
   currentSearch = q;
   if (!q) {
     searchDropdown.style.display = "none";
-    if (["battleground", "applicants", "table"].includes(currentView)) renderCurrentView();
+    if (["battleground", "applicants", "risk", "table"].includes(currentView)) renderCurrentView();
     else applyCanvasSearch();
     return;
   }
@@ -2237,7 +2474,7 @@ searchInput.addEventListener("input", () => {
   });
 
   searchDropdown.style.display = "block";
-  if (["battleground", "applicants", "table"].includes(currentView)) renderCurrentView();
+  if (["battleground", "applicants", "risk", "table"].includes(currentView)) renderCurrentView();
   else applyCanvasSearch();
 });
 
@@ -2391,6 +2628,7 @@ function escapeHtml(s) {
 
 // Initialize
 renderCurrentView();
+loadRiskReferences();
 </script>
 </body>
 </html>
