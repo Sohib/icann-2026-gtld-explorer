@@ -1138,29 +1138,25 @@ function renderCurrentView() {
 
 /* --- 1. Zoomable Treemap with Enlarged Boxes & Spacious Typography --- */
 function renderTreemap() {
-  const containerW = container.clientWidth || 900;
-  const containerH = container.clientHeight || 720;
-  
-  // Virtual canvas resolution scaled up to make boxes significantly larger
-  const width = Math.round(containerW * 1.8 * sizeMultiplier);
-  const height = Math.round(containerH * 1.7 * sizeMultiplier);
+  const width = container.clientWidth || 900;
+  const height = container.clientHeight || 720;
   const data = getFilteredData();
   
-  // Enhanced weighting gives generous baseline area so every leaf box is spacious
+  // Clean hierarchy summation
   const hierarchy = d3.hierarchy(data)
     .sum(d => {
       if (d.children) return 0;
       const v = d.value || 1;
-      return 8 + Math.pow(v, 1.25) * 6;
+      return 2 + Math.pow(v, 1.15) * 3;
     })
     .sort((a, b) => b.value - a.value);
 
   const treemapLayout = d3.treemap()
     .tile(d3.treemapSquarify.ratio(1.2))
     .size([width, height])
-    .paddingOuter(6)
-    .paddingTop(28)
-    .paddingInner(3)
+    .paddingOuter(4)
+    .paddingTop(24)
+    .paddingInner(2)
     .round(true);
 
   treemapLayout(hierarchy);
@@ -1170,7 +1166,7 @@ function renderTreemap() {
   const svg = d3.select(container).append("svg")
     .attr("width", "100%")
     .attr("height", "100%")
-    .attr("viewBox", [0, 0, containerW, containerH])
+    .attr("viewBox", [0, 0, width, height])
     .style("display", "block");
   
   activeSvg = svg;
@@ -1181,19 +1177,14 @@ function renderTreemap() {
 
   // D3 Zoom Behavior for Mouse Wheel & Dragging
   const zoomBehavior = d3.zoom()
-    .scaleExtent([0.2, 35])
+    .scaleExtent([0.5, 35])
     .on("zoom", (event) => {
       contentGroup.attr("transform", event.transform);
+      updateTreemapLabelVisibility(event.transform.k);
     });
 
   activeZoomBehavior = zoomBehavior;
   svg.call(zoomBehavior);
-
-  // Initial fit to screen
-  const initialScale = Math.min(containerW / width, containerH / height) * 0.98;
-  const initialTx = (containerW - width * initialScale) / 2;
-  const initialTy = (containerH - height * initialScale) / 2;
-  svg.call(zoomBehavior.transform, d3.zoomIdentity.translate(initialTx, initialTy).scale(initialScale));
 
   // Background rect (click to zoom out to parent)
   contentGroup.append("rect")
@@ -1205,10 +1196,7 @@ function renderTreemap() {
       if (currentFocusNode && currentFocusNode.parent) {
         zoomTreemapTo(currentFocusNode.parent);
       } else {
-        svg.transition().duration(600).call(
-          zoomBehavior.transform,
-          d3.zoomIdentity.translate(initialTx, initialTy).scale(initialScale)
-        );
+        svg.transition().duration(600).call(zoomBehavior.transform, d3.zoomIdentity);
         currentFocusNode = hierarchy;
         updateBreadcrumbs(hierarchy);
       }
@@ -1225,7 +1213,7 @@ function renderTreemap() {
   nodes.append("rect")
     .attr("width", d => Math.max(0, d.x1 - d.x0))
     .attr("height", d => Math.max(0, d.y1 - d.y0))
-    .attr("rx", d => d.children ? 8 : 5)
+    .attr("rx", d => d.children ? 6 : 4)
     .attr("fill", d => {
       if (d.children) return "rgba(14, 21, 38, 0.45)";
       const isIdn = getIDNInfo(d.data.name);
@@ -1243,7 +1231,7 @@ function renderTreemap() {
       if (getIDNInfo(d.data.name)) return "#facc15";
       return "rgba(0, 0, 0, 0.4)";
     })
-    .attr("stroke-width", d => (d.data && d.data.value > 1) ? 1.8 : 0.9)
+    .attr("stroke-width", d => (d.data && d.data.value > 1) ? 1.6 : 0.8)
     .style("cursor", "pointer")
     .on("click", (e, d) => {
       if (e.defaultPrevented) return;
@@ -1260,58 +1248,51 @@ function renderTreemap() {
     .append("text")
     .attr("class", "tm-parent-label")
     .attr("x", 8)
-    .attr("y", 18)
+    .attr("y", 16)
     .attr("fill", "#94a3b8")
-    .attr("font-size", "12px")
+    .attr("font-size", "11.5px")
     .attr("font-weight", "700")
     .attr("letter-spacing", "0.5px")
     .attr("pointer-events", "none")
     .text(d => {
       const w = d.x1 - d.x0;
-      if (w < 45) return "";
+      if (w < 40) return "";
       const txt = d.data.name || "";
-      return w < 130 && txt.length > 15 ? txt.slice(0, 13) + "…" : txt;
+      return w < 120 && txt.length > 15 ? txt.slice(0, 13) + "…" : txt;
     });
 
   // Leaf Node Text Labels
   const leafNodes = nodes.filter(d => !d.children);
 
-  // Line 1: Main TLD Name
-  leafNodes.append("text")
+  // Line 1: Main TLD Name (Readable on first load, bold)
+  const tmMainTexts = leafNodes.append("text")
     .attr("class", "tm-label")
     .attr("x", d => Math.max(0, (d.x1 - d.x0) / 2))
     .attr("y", d => {
       const h = d.y1 - d.y0;
-      return h > 40 ? Math.max(0, h / 2 - 2) : Math.max(0, h / 2 + 4);
+      return h > 34 ? Math.max(0, h / 2 - 2) : Math.max(0, h / 2 + 4);
     })
     .attr("text-anchor", "middle")
     .attr("font-size", d => {
       const w = d.x1 - d.x0;
       const h = d.y1 - d.y0;
-      if (w < 28 || h < 18) return "0px";
-      if (w < 48 || h < 24) return "10px";
-      if (w < 85 || h < 38) return "12px";
-      if (w < 140) return "14px";
-      return "16px";
+      if (w >= 100 && h >= 40) return "14px";
+      if (w >= 60 && h >= 28) return "12.5px";
+      if (w >= 40 && h >= 20) return "11px";
+      return "10px";
     })
     .text(d => {
-      const w = d.x1 - d.x0;
-      const h = d.y1 - d.y0;
-      if (w < 28 || h < 18) return "";
       const idn = getIDNInfo(d.data.name);
-      if (idn) return idn.unicode;
-      const nm = d.data.name || "";
-      return w < 55 && nm.length > 7 ? nm.slice(0, 6) + "…" : nm;
+      return idn ? idn.unicode : (d.data.name || "");
     });
 
   // Line 2: Subtitle (English equivalent for IDN, or Contest badge / app count)
-  leafNodes.filter(d => (d.y1 - d.y0) >= 36 && (d.x1 - d.x0) >= 42)
-    .append("text")
+  const tmSubTexts = leafNodes.append("text")
     .attr("class", "tm-sublabel")
     .attr("x", d => Math.max(0, (d.x1 - d.x0) / 2))
-    .attr("y", d => Math.max(0, (d.y1 - d.y0) / 2 + 13))
+    .attr("y", d => Math.max(0, (d.y1 - d.y0) / 2 + 11))
     .attr("text-anchor", "middle")
-    .attr("font-size", d => (d.x1 - d.x0) > 95 ? "11px" : "9.5px")
+    .attr("font-size", "9.5px")
     .attr("fill", d => {
       if (getIDNInfo(d.data.name)) return "#38bdf8";
       if (d.data.value > 1) return "#f43f5e";
@@ -1320,18 +1301,35 @@ function renderTreemap() {
     .text(d => {
       const idn = getIDNInfo(d.data.name);
       if (idn) return `≈ ${idn.englishEquiv}`;
-      return d.data.value > 1 ? `⚔ ${d.data.value} rivals` : "1 app";
+      return d.data.value > 1 ? `⚔ ${d.data.value}` : "";
     });
 
+  function updateTreemapLabelVisibility(k) {
+    // Dynamically show labels as smaller boxes scale up during zoom
+    tmMainTexts.style("display", d => {
+      const screenW = (d.x1 - d.x0) * k;
+      const screenH = (d.y1 - d.y0) * k;
+      return (screenW >= 28 && screenH >= 15) ? "inline" : "none";
+    });
+
+    tmSubTexts.style("display", d => {
+      const screenW = (d.x1 - d.x0) * k;
+      const screenH = (d.y1 - d.y0) * k;
+      const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
+      return (hasSub && screenW >= 42 && screenH >= 30) ? "inline" : "none";
+    });
+  }
+
+  updateTreemapLabelVisibility(1);
   updateBreadcrumbs(hierarchy);
 
   function zoomTreemapTo(d) {
     currentFocusNode = d;
     updateBreadcrumbs(d);
 
-    const k = Math.min(containerW / (d.x1 - d.x0), containerH / (d.y1 - d.y0)) * 0.95;
-    const tx = containerW / 2 - ((d.x0 + d.x1) / 2) * k;
-    const ty = containerH / 2 - ((d.y0 + d.y1) / 2) * k;
+    const k = Math.min(width / (d.x1 - d.x0), height / (d.y1 - d.y0)) * 0.96;
+    const tx = width / 2 - ((d.x0 + d.x1) / 2) * k;
+    const ty = height / 2 - ((d.y0 + d.y1) / 2) * k;
 
     svg.transition().duration(750).call(
       zoomBehavior.transform,
@@ -1345,23 +1343,19 @@ function renderTreemap() {
 
 /* --- 2. Zoomable Bubble Pack with Enlarged Circles & Spacious Typography --- */
 function renderBubblePack() {
-  const containerW = container.clientWidth || 900;
-  const containerH = container.clientHeight || 720;
-  
-  // Virtual canvas resolution scaled up to give circles generous diameter
-  const width = Math.round(containerW * 2.2 * sizeMultiplier);
-  const height = Math.round(containerH * 2.0 * sizeMultiplier);
+  const width = container.clientWidth || 900;
+  const height = container.clientHeight || 720;
   const data = getFilteredData();
 
+  // Root pack hierarchy
   const root = d3.pack()
     .size([width, height])
-    .padding(d => d.depth === 1 ? 12 : 5)(
+    .padding(d => d.depth === 1 ? 10 : 3)(
       d3.hierarchy(data)
         .sum(d => {
           if (d.children) return 0;
           const v = d.value || 1;
-          // Generously increased baseline weight ensures every bubble is spacious
-          return 12 + Math.pow(v, 1.3) * 8;
+          return 2 + Math.pow(v, 1.15) * 3;
         })
         .sort((a, b) => b.value - a.value)
     );
@@ -1372,7 +1366,7 @@ function renderBubblePack() {
   const svg = d3.select(container).append("svg")
     .attr("width", "100%")
     .attr("height", "100%")
-    .attr("viewBox", `0 0 ${containerW} ${containerH}`)
+    .attr("viewBox", `0 0 ${width} ${height}`)
     .style("display", "block");
 
   activeSvg = svg;
@@ -1383,19 +1377,14 @@ function renderBubblePack() {
 
   // D3 Zoom Behavior for Mouse Wheel & Dragging
   const zoomBehavior = d3.zoom()
-    .scaleExtent([0.2, 40])
+    .scaleExtent([0.5, 40])
     .on("zoom", (event) => {
       contentGroup.attr("transform", event.transform);
+      updateBubbleLabelVisibility(event.transform.k);
     });
 
   activeZoomBehavior = zoomBehavior;
   svg.call(zoomBehavior);
-
-  // Initial fit to screen
-  const initialScale = Math.min(containerW / width, containerH / height) * 0.96;
-  const initialTx = (containerW - width * initialScale) / 2;
-  const initialTy = (containerH - height * initialScale) / 2;
-  svg.call(zoomBehavior.transform, d3.zoomIdentity.translate(initialTx, initialTy).scale(initialScale));
 
   contentGroup.append("rect")
     .attr("width", width)
@@ -1406,15 +1395,13 @@ function renderBubblePack() {
       if (currentFocusNode && currentFocusNode.parent) {
         zoomBubbleTo(currentFocusNode.parent);
       } else {
-        svg.transition().duration(600).call(
-          zoomBehavior.transform,
-          d3.zoomIdentity.translate(initialTx, initialTy).scale(initialScale)
-        );
+        svg.transition().duration(600).call(zoomBehavior.transform, d3.zoomIdentity);
         currentFocusNode = root;
         updateBreadcrumbs(root);
       }
     });
 
+  // Circle nodes
   const node = contentGroup.append("g")
     .selectAll("circle")
     .data(root.descendants().slice(1))
@@ -1451,12 +1438,12 @@ function renderBubblePack() {
     .attr("class", "bubble-group-headers")
     .style("pointer-events", "none")
     .selectAll("g")
-    .data(root.descendants().filter(d => d.depth > 0 && d.children && d.r > 26))
+    .data(root.descendants().filter(d => d.depth > 0 && d.children && d.r > 24))
     .join("g")
     .attr("transform", d => `translate(${d.x},${d.y - d.r + 14})`);
 
   groupHeaders.append("rect")
-    .attr("fill", "rgba(10, 15, 29, 0.88)")
+    .attr("fill", "rgba(10, 15, 29, 0.92)")
     .attr("stroke", "rgba(255, 255, 255, 0.22)")
     .attr("stroke-width", 0.8)
     .attr("rx", 9)
@@ -1485,65 +1472,78 @@ function renderBubblePack() {
       return (txt.length > maxLen && maxLen > 6) ? txt.slice(0, maxLen - 2) + "…" : txt;
     });
 
-  // 2. Leaf Domain Labels (Placed in center of leaf circle, never covered by group text)
+  // 2. Leaf Domain Labels (Large & Readable on first load, dynamically revealed on smaller circles when zooming in)
   const leafLabels = contentGroup.append("g")
     .attr("class", "bubble-leaf-labels")
     .style("pointer-events", "none")
     .selectAll("g")
     .data(root.descendants().filter(d => !d.children))
     .join("g")
+    .attr("class", "bubble-leaf-group")
     .attr("transform", d => `translate(${d.x},${d.y})`);
 
-  leafLabels.append("text")
+  // Line 1: Main Domain Name (Bold & Readable)
+  const bpMainTexts = leafLabels.append("text")
     .attr("class", "bubble-leaf-text")
     .attr("text-anchor", "middle")
     .attr("fill", "#ffffff")
     .attr("font-family", "'JetBrains Mono', monospace")
-    .attr("font-weight", 700)
+    .attr("font-weight", "700")
     .style("text-shadow", "0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.95)")
-    .attr("y", d => {
-      const idn = getIDNInfo(d.data.name);
-      return idn && d.r > 20 ? -2 : 3.5;
-    })
+    .attr("y", d => (d.r >= 18 ? -2 : 3.5))
     .attr("font-size", d => {
-      if (d.r < 9) return "0px";
-      if (d.r < 18) return "9px";
-      if (d.r < 32) return "11px";
-      return "13px";
+      // Bold, readable font sizing
+      if (d.r >= 32) return "14px";
+      if (d.r >= 20) return "12.5px";
+      if (d.r >= 13) return "11px";
+      return "10px";
     })
     .text(d => {
-      if (d.r < 9) return "";
       const idn = getIDNInfo(d.data.name);
-      if (idn) return idn.unicode;
-      const n = d.data.name || "";
-      return d.r < 22 && n.length > 7 ? n.slice(0, 6) + "…" : n;
+      return idn ? idn.unicode : (d.data.name || "");
     });
 
-  // Secondary sublabel for IDN English equivalent or contested badge
-  leafLabels.filter(d => d.r > 20)
-    .append("text")
+  // Line 2: Secondary sublabel (English equivalent or contested badge)
+  const bpSubTexts = leafLabels.append("text")
+    .attr("class", "bubble-leaf-subtext")
     .attr("text-anchor", "middle")
-    .attr("y", 11)
+    .attr("y", 11.5)
     .attr("font-family", "'JetBrains Mono', monospace")
-    .attr("font-size", "8.5px")
-    .attr("font-weight", 600)
-    .style("text-shadow", "0 1px 2px rgba(0,0,0,0.9)")
-    .attr("fill", d => getIDNInfo(d.data.name) ? "#38bdf8" : (d.data.value > 1 ? "#f43f5e" : "#94a3b8"))
+    .attr("font-size", d => (d.r >= 28 ? "10px" : "8.5px"))
+    .attr("font-weight", "600")
+    .style("text-shadow", "0 1px 2px rgba(0,0,0,0.95)")
+    .attr("fill", d => getIDNInfo(d.data.name) ? "#38bdf8" : (d.data.value > 1 ? "#f43f5e" : "#cbd5e1"))
     .text(d => {
       const idn = getIDNInfo(d.data.name);
       if (idn) return `≈ ${idn.englishEquiv}`;
       return (d.data.value > 1) ? `⚔ ${d.data.value}` : "";
     });
 
+  // Dynamic zoom-based label visibility function:
+  // Circles readable on first load, smaller circles smoothly reveal their text as you zoom in!
+  function updateBubbleLabelVisibility(k) {
+    bpMainTexts.style("display", d => {
+      const screenRadius = d.r * k;
+      return (screenRadius >= 10.5) ? "inline" : "none";
+    });
+
+    bpSubTexts.style("display", d => {
+      const screenRadius = d.r * k;
+      const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
+      return (hasSub && screenRadius >= 20) ? "inline" : "none";
+    });
+  }
+
+  updateBubbleLabelVisibility(1);
   updateBreadcrumbs(root);
 
   function zoomBubbleTo(d) {
     currentFocusNode = d;
     updateBreadcrumbs(d);
 
-    const k = (Math.min(containerW, containerH) / (d.r * 2.05));
-    const tx = containerW / 2 - d.x * k;
-    const ty = containerH / 2 - d.y * k;
+    const k = (Math.min(width, height) / (d.r * 2.05));
+    const tx = width / 2 - d.x * k;
+    const ty = height / 2 - d.y * k;
 
     svg.transition().duration(750).call(
       zoomBehavior.transform,
