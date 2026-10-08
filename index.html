@@ -370,8 +370,10 @@ header.app-header {
   background: var(--bg-base);
   padding: 8px 24px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid rgba(255,255,255,0.05);
   font-size: 13px;
 }
@@ -404,19 +406,82 @@ header.app-header {
 
 .canvas-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 .mouse-hint {
-  font-size: 11px;
-  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #bae6fd;
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255,255,255,0.04);
-  padding: 4px 8px;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 5px 9px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.zoom-coachmark {
+  position: absolute;
+  z-index: 20;
+  left: 24px;
+  bottom: 24px;
+  max-width: 420px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  background: rgba(14, 21, 38, 0.96);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+}
+.zoom-coachmark[hidden] {
+  display: none;
+}
+.zoom-coachmark__title {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+.zoom-coachmark__body {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.zoom-coachmark__action {
+  background: var(--accent);
+  border: 1px solid #7dd3fc;
+  color: #03111d;
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.zoom-coachmark__dismiss {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.zoom-coachmark__dismiss:hover,
+.zoom-coachmark__dismiss:focus-visible {
+  border-color: var(--border);
+  color: #fff;
 }
 .action-btn {
   background: var(--bg-surface);
@@ -794,6 +859,34 @@ table.data-table tr:hover td {
     max-height: 400px;
   }
 }
+@media (max-width: 640px) {
+  .sub-toolbar {
+    padding: 8px 12px;
+  }
+  .canvas-actions {
+    width: 100%;
+  }
+  .mouse-hint {
+    flex-basis: 100%;
+  }
+}
+@media (max-width: 640px) {
+  .zoom-coachmark {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    grid-template-columns: 1fr auto;
+  }
+  .zoom-coachmark__dismiss {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .zoom-coachmark__action {
+    grid-column: 1 / -1;
+  }
+}
+
+
 </style>
 </head>
 <body>
@@ -871,17 +964,26 @@ table.data-table tr:hover td {
     <span class="crumb-node current">Root Overview</span>
   </div>
   <div class="canvas-actions">
-    <span class="mouse-hint">🖱 Scroll wheel to zoom · Drag to pan</span>
-    <button class="action-btn" id="btn-zoom-in" title="Zoom in">+</button>
-    <button class="action-btn" id="btn-zoom-out" title="Zoom out">−</button>
-    <button class="action-btn" id="btn-zoom-reset" title="Reset zoom">⟲ Reset</button>
-    <button class="action-btn" id="btn-export-svg">⬇ Export SVG</button>
+    <span class="mouse-hint">ℹ Labels reveal as you zoom</span>
+    <button class="action-btn" id="btn-zoom-help" type="button" title="Show diagram navigation help">? Help</button>
+    <button class="action-btn" id="btn-zoom-in" type="button" title="Zoom in and reveal labels" aria-label="Zoom in and reveal labels">+</button>
+    <button class="action-btn" id="btn-zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+    <button class="action-btn" id="btn-zoom-reset" type="button" title="Reset zoom">⟲ Reset</button>
+    <button class="action-btn" id="btn-export-svg" type="button">⬇ Export SVG</button>
   </div>
 </div>
 
 <div class="main-layout">
   <div id="viz-container">
     <div id="floating-tooltip"></div>
+    <aside class="zoom-coachmark" id="zoom-coachmark" aria-label="Diagram navigation tip" hidden>
+      <div>
+        <strong class="zoom-coachmark__title">Too many names at once?</strong>
+        <span class="zoom-coachmark__body">Zoom in to reveal readable TLD labels. Scroll, pinch, or use the zoom controls.</span>
+      </div>
+      <button class="zoom-coachmark__action" id="btn-zoom-coachmark" type="button">Zoom in</button>
+      <button class="zoom-coachmark__dismiss" id="btn-dismiss-zoom-coachmark" type="button" aria-label="Dismiss navigation tip">×</button>
+    </aside>
     <div id="panel-battleground" class="view-panel">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h2 style="font-size:18px; font-weight:700;">Contested TLDs Leaderboard (Strings with Multiple Competing Applicants)</h2>
@@ -1059,6 +1161,26 @@ let currentRoot = null;
 let treemapZoomFn = null;
 let bubbleZoomFn = null;
 
+const zoomCoachmark = document.getElementById("zoom-coachmark");
+let zoomCoachmarkDismissed = sessionStorage.getItem("zoomCoachmarkDismissed") === "true";
+
+function showZoomCoachmark(force = false) {
+  if (!["treemap", "bubble"].includes(currentView)) {
+    zoomCoachmark.hidden = true;
+    return;
+  }
+  if (!force && zoomCoachmarkDismissed) return;
+  zoomCoachmark.hidden = false;
+}
+
+function dismissZoomCoachmark(remember = false) {
+  zoomCoachmark.hidden = true;
+  if (remember) {
+    zoomCoachmarkDismissed = true;
+    sessionStorage.setItem("zoomCoachmarkDismissed", "true");
+  }
+}
+
 /* --- KPI Dynamic Updater --- */
 function updateKPIs() {
   const filtered = allTLDList.filter(d => {
@@ -1110,14 +1232,17 @@ function renderCurrentView() {
   document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
   
   if (currentView === "battleground") {
+    dismissZoomCoachmark();
     document.getElementById("panel-battleground").classList.add("active");
     renderBattleground();
     return;
   } else if (currentView === "applicants") {
+    dismissZoomCoachmark();
     document.getElementById("panel-applicants").classList.add("active");
     renderApplicants();
     return;
   } else if (currentView === "table") {
+    dismissZoomCoachmark();
     document.getElementById("panel-table").classList.add("active");
     renderTable();
     return;
@@ -1134,6 +1259,7 @@ function renderCurrentView() {
   } else if (currentView === "bubble") {
     renderBubblePack();
   }
+  showZoomCoachmark();
 }
 
 /* --- 1. Zoomable Treemap with Enlarged Boxes & Spacious Typography --- */
@@ -1181,6 +1307,9 @@ function renderTreemap() {
     .on("zoom", (event) => {
       contentGroup.attr("transform", event.transform);
       updateTreemapLabelVisibility(event.transform.k);
+      if (event.sourceEvent?.type === "wheel" || event.sourceEvent?.type?.startsWith("touch")) {
+        dismissZoomCoachmark(true);
+      }
     });
 
   activeZoomBehavior = zoomBehavior;
@@ -1264,7 +1393,7 @@ function renderTreemap() {
   // Leaf Node Text Labels
   const leafNodes = nodes.filter(d => !d.children);
 
-  // Line 1: Main TLD Name (Readable on first load, bold)
+  // Leaf labels stay hidden until their tile is large enough to render at 12px or larger.
   const tmMainTexts = leafNodes.append("text")
     .attr("class", "tm-label")
     .attr("x", d => Math.max(0, (d.x1 - d.x0) / 2))
@@ -1276,10 +1405,9 @@ function renderTreemap() {
     .attr("font-size", d => {
       const w = d.x1 - d.x0;
       const h = d.y1 - d.y0;
-      if (w >= 100 && h >= 40) return "14px";
-      if (w >= 60 && h >= 28) return "12.5px";
-      if (w >= 40 && h >= 20) return "11px";
-      return "10px";
+      if (w >= 100 && h >= 40) return "15px";
+      if (w >= 60 && h >= 28) return "13.5px";
+      return "12px";
     })
     .text(d => {
       const idn = getIDNInfo(d.data.name);
@@ -1290,9 +1418,9 @@ function renderTreemap() {
   const tmSubTexts = leafNodes.append("text")
     .attr("class", "tm-sublabel")
     .attr("x", d => Math.max(0, (d.x1 - d.x0) / 2))
-    .attr("y", d => Math.max(0, (d.y1 - d.y0) / 2 + 11))
+    .attr("y", d => Math.max(0, (d.y1 - d.y0) / 2 + 12))
     .attr("text-anchor", "middle")
-    .attr("font-size", "9.5px")
+    .attr("font-size", "10.5px")
     .attr("fill", d => {
       if (getIDNInfo(d.data.name)) return "#38bdf8";
       if (d.data.value > 1) return "#f43f5e";
@@ -1305,19 +1433,38 @@ function renderTreemap() {
     });
 
   function updateTreemapLabelVisibility(k) {
-    // Dynamically show labels as smaller boxes scale up during zoom
-    tmMainTexts.style("display", d => {
-      const screenW = (d.x1 - d.x0) * k;
-      const screenH = (d.y1 - d.y0) * k;
-      return (screenW >= 28 && screenH >= 15) ? "inline" : "none";
-    });
+    const mainFontSize = Math.min(18, 12 + Math.log2(Math.max(1, k)) * 2);
 
-    tmSubTexts.style("display", d => {
-      const screenW = (d.x1 - d.x0) * k;
-      const screenH = (d.y1 - d.y0) * k;
-      const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
-      return (hasSub && screenW >= 42 && screenH >= 30) ? "inline" : "none";
-    });
+    tmMainTexts
+      .attr("font-size", `${mainFontSize / k}px`)
+      .attr("y", d => {
+        const h = d.y1 - d.y0;
+        const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
+        return h / 2 + (hasSub ? -3 : 5) / k;
+      })
+      .text(d => {
+        const label = getIDNInfo(d.data.name)?.unicode || d.data.name || "";
+        const maxChars = Math.floor((((d.x1 - d.x0) * k) - 8) / (mainFontSize * 0.65));
+        const chars = Array.from(label);
+        if (maxChars < 3) return "";
+        return chars.length > maxChars ? `${chars.slice(0, maxChars - 1).join("")}…` : label;
+      })
+      .style("display", function(d) {
+        const screenW = (d.x1 - d.x0) * k;
+        const screenH = (d.y1 - d.y0) * k;
+        return (this.textContent && screenW >= 28 && screenH >= 18) ? "inline" : "none";
+      });
+
+    tmSubTexts
+      .attr("font-size", `${11 / k}px`)
+      .attr("y", d => (d.y1 - d.y0) / 2 + 13 / k)
+      .style("display", function(d) {
+        const screenW = (d.x1 - d.x0) * k;
+        const screenH = (d.y1 - d.y0) * k;
+        const screenTextWidth = this.getComputedTextLength() * k;
+        const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
+        return (hasSub && screenW >= 60 && screenH >= 40 && screenTextWidth <= screenW - 12) ? "inline" : "none";
+      });
   }
 
   updateTreemapLabelVisibility(1);
@@ -1381,6 +1528,9 @@ function renderBubblePack() {
     .on("zoom", (event) => {
       contentGroup.attr("transform", event.transform);
       updateBubbleLabelVisibility(event.transform.k);
+      if (event.sourceEvent?.type === "wheel" || event.sourceEvent?.type?.startsWith("touch")) {
+        dismissZoomCoachmark(true);
+      }
     });
 
   activeZoomBehavior = zoomBehavior;
@@ -1472,7 +1622,7 @@ function renderBubblePack() {
       return (txt.length > maxLen && maxLen > 6) ? txt.slice(0, maxLen - 2) + "…" : txt;
     });
 
-  // 2. Leaf Domain Labels (Large & Readable on first load, dynamically revealed on smaller circles when zooming in)
+  // 2. Leaf Domain Labels. Small circles remain clean at overview; labels appear at a readable size on zoom.
   const leafLabels = contentGroup.append("g")
     .attr("class", "bubble-leaf-labels")
     .style("pointer-events", "none")
@@ -1482,7 +1632,7 @@ function renderBubblePack() {
     .attr("class", "bubble-leaf-group")
     .attr("transform", d => `translate(${d.x},${d.y})`);
 
-  // Line 1: Main Domain Name (Bold & Readable)
+  // Line 1: Main domain name
   const bpMainTexts = leafLabels.append("text")
     .attr("class", "bubble-leaf-text")
     .attr("text-anchor", "middle")
@@ -1492,11 +1642,9 @@ function renderBubblePack() {
     .style("text-shadow", "0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.95)")
     .attr("y", d => (d.r >= 18 ? -2 : 3.5))
     .attr("font-size", d => {
-      // Bold, readable font sizing
-      if (d.r >= 32) return "14px";
-      if (d.r >= 20) return "12.5px";
-      if (d.r >= 13) return "11px";
-      return "10px";
+      if (d.r >= 42) return "16px";
+      if (d.r >= 25) return "14px";
+      return "12px";
     })
     .text(d => {
       const idn = getIDNInfo(d.data.name);
@@ -1507,9 +1655,9 @@ function renderBubblePack() {
   const bpSubTexts = leafLabels.append("text")
     .attr("class", "bubble-leaf-subtext")
     .attr("text-anchor", "middle")
-    .attr("y", 11.5)
+    .attr("y", 12)
     .attr("font-family", "'JetBrains Mono', monospace")
-    .attr("font-size", d => (d.r >= 28 ? "10px" : "8.5px"))
+    .attr("font-size", "10.5px")
     .attr("font-weight", "600")
     .style("text-shadow", "0 1px 2px rgba(0,0,0,0.95)")
     .attr("fill", d => getIDNInfo(d.data.name) ? "#38bdf8" : (d.data.value > 1 ? "#f43f5e" : "#cbd5e1"))
@@ -1519,19 +1667,26 @@ function renderBubblePack() {
       return (d.data.value > 1) ? `⚔ ${d.data.value}` : "";
     });
 
-  // Dynamic zoom-based label visibility function:
-  // Circles readable on first load, smaller circles smoothly reveal their text as you zoom in!
+  // Keep labels at a readable screen size instead of scaling them into overlapping text.
   function updateBubbleLabelVisibility(k) {
-    bpMainTexts.style("display", d => {
-      const screenRadius = d.r * k;
-      return (screenRadius >= 10.5) ? "inline" : "none";
-    });
+    bpMainTexts
+      .attr("font-size", `${16 / k}px`)
+      .attr("y", -3 / k)
+      .style("display", function(d) {
+        const screenRadius = d.r * k;
+        const screenTextWidth = this.getComputedTextLength() * k;
+        return (screenRadius >= 22 && screenTextWidth <= screenRadius * 1.55) ? "inline" : "none";
+      });
 
-    bpSubTexts.style("display", d => {
-      const screenRadius = d.r * k;
-      const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
-      return (hasSub && screenRadius >= 20) ? "inline" : "none";
-    });
+    bpSubTexts
+      .attr("font-size", `${11 / k}px`)
+      .attr("y", 14 / k)
+      .style("display", function(d) {
+        const screenRadius = d.r * k;
+        const screenTextWidth = this.getComputedTextLength() * k;
+        const hasSub = getIDNInfo(d.data.name) || (d.data.value > 1);
+        return (hasSub && screenRadius >= 36 && screenTextWidth <= screenRadius * 1.45) ? "inline" : "none";
+      });
   }
 
   updateBubbleLabelVisibility(1);
@@ -2146,11 +2301,23 @@ toggleContestedBtn.addEventListener("click", () => {
 });
 
 /* --- Zoom Toolbar Actions --- */
+document.getElementById("btn-zoom-help").addEventListener("click", () => showZoomCoachmark(true));
+
 document.getElementById("btn-zoom-in").addEventListener("click", () => {
+  dismissZoomCoachmark(true);
   if (activeSvg && activeZoomBehavior) {
-    activeSvg.transition().duration(250).call(activeZoomBehavior.scaleBy, 1.4);
+    activeSvg.transition().duration(250).call(activeZoomBehavior.scaleBy, 1.5);
   }
 });
+
+document.getElementById("btn-zoom-coachmark").addEventListener("click", () => {
+  dismissZoomCoachmark(true);
+  if (activeSvg && activeZoomBehavior) {
+    activeSvg.transition().duration(250).call(activeZoomBehavior.scaleBy, 1.8);
+  }
+});
+
+document.getElementById("btn-dismiss-zoom-coachmark").addEventListener("click", () => dismissZoomCoachmark(true));
 
 document.getElementById("btn-zoom-out").addEventListener("click", () => {
   if (activeSvg && activeZoomBehavior) {
